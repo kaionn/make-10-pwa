@@ -32,24 +32,19 @@
 
 ## Phase 1: プロジェクト初期化 [feature:setup]
 
-- [ ] `cc:TODO` Vite + React + TypeScript プロジェクトをスキャフォールド
-- [ ] `cc:TODO` Tailwind CSS をセットアップ
-- [ ] `cc:TODO` vite-plugin-pwa を設定（manifest, registerType: autoUpdate, オフラインキャッシュ）
-- [ ] `cc:TODO` グローバル CSS（user-select: none, touch-action: manipulation）
-- [ ] `cc:TODO` ダミーアイコン配置（public/icons/）
+- [x] `cc:done` Vite + React + TypeScript プロジェクトをスキャフォールド
+- [x] `cc:done` Tailwind CSS をセットアップ
+- [x] `cc:done` vite-plugin-pwa を設定（manifest, registerType: autoUpdate, オフラインキャッシュ）
+- [x] `cc:done` グローバル CSS（user-select: none, touch-action: manipulation）
+- [x] `cc:done` ダミーアイコン配置（public/icons/）
 
 ## Phase 2: ゲームロジック（純粋関数） [feature:tdd]
 
-- [ ] `cc:TODO` 事前計算テーブル生成スクリプトを作成し、結果を `src/data/solvableCombinations.ts` に定数として書き出す
-- [ ] `cc:TODO` 数式パーサー `src/logic/parser.ts` — トークナイズ → 再帰下降パーサー → AST → 評価
-  - トークン: 数字(0-9), 演算子(+,-,×,÷), 括弧
-  - 浮動小数点誤差対策: `Math.abs(result - 10) < 1e-9`
-- [ ] `cc:TODO` バリデーション `src/logic/validator.ts` — 4数字すべて使用チェック、構文チェック
-- [ ] `cc:TODO` 問題生成 `src/logic/generatePuzzle.ts` — テーブルからランダム選出
-- [ ] `cc:TODO` Phase 2 のユニットテスト（Vitest）
-  - パーサー: 基本四則演算、括弧、除算誤差、不正入力
-  - バリデーション: 未使用数字検出、余分な数字検出
-  - 問題生成: 返される4数字が必ずテーブルに存在すること
+- [x] `cc:done` 事前計算テーブル `src/data/solvableCombinations.ts`（552エントリ）
+- [x] `cc:done` 数式パーサー `src/logic/parser.ts` — 再帰下降パーサー（型エラー修正済み）
+- [x] `cc:done` バリデーション `src/logic/validator.ts` — 4数字使用チェック、構文チェック
+- [x] `cc:done` 問題生成 `src/logic/generatePuzzle.ts` — テーブルからランダム選出
+- [x] `cc:done` Phase 2 のユニットテスト（Vitest 12/12 PASS）
 
 ## Phase 3: React フック + 状態管理
 
