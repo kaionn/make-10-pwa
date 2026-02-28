@@ -48,24 +48,24 @@
 
 ## Phase 3: React フック + 状態管理
 
-- [ ] `cc:TODO` `src/hooks/useMake10.ts` — ゲーム全体の状態管理フック
+- [x] `cc:done` `src/hooks/useMake10.ts` — ゲーム全体の状態管理フック
   - state: expression（入力式）, numbers（4数字 + used フラグ）, score, feedback
   - actions: appendDigit, appendOperator, appendBracket, backspace, clear, judge
   - judge 時: validator → parser → 結果判定 → フィードバック → 次の問題
-- [ ] `cc:TODO` スコア永続化（localStorage read/write）
+- [x] `cc:done` スコア永続化（localStorage read/write）
 
 ## Phase 4: UI コンポーネント
 
-- [ ] `cc:TODO` `Header` — タイトル + スコア表示
-- [ ] `cc:TODO` `Display` — 入力式の表示（大きめフォント）
-- [ ] `cc:TODO` `NumberPad` — 4つの数字ボタン（2×2 グリッド、used 時 disabled）
-- [ ] `cc:TODO` `OperatorPad` — +, -, ×, ÷, (, ) ボタン
-- [ ] `cc:TODO` `ControlPad` — BS, C, Enter ボタン
-- [ ] `cc:TODO` `FeedbackOverlay` — 正解/不正解のオーバーレイ（CSS アニメーション）
-- [ ] `cc:TODO` `App.tsx` で全コンポーネントを組み立て、useMake10 と接続
+- [x] `cc:done` `Header` — タイトル + スコア表示
+- [x] `cc:done` `Display` — 入力式の表示（大きめフォント）
+- [x] `cc:done` `NumberPad` — 4つの数字ボタン（2×2 グリッド、used 時 disabled）
+- [x] `cc:done` `OperatorPad` — +, -, ×, ÷, (, ) ボタン
+- [x] `cc:done` `ControlPad` — BS, C, Enter ボタン
+- [x] `cc:done` `FeedbackOverlay` — 正解/不正解のオーバーレイ（CSS アニメーション）
+- [x] `cc:done` `App.tsx` で全コンポーネントを組み立て、useMake10 と接続
 
 ## Phase 5: 統合・仕上げ
 
-- [ ] `cc:TODO` モバイルレイアウト調整（100dvh、ボタンサイズ 44px 以上）
-- [ ] `cc:TODO` PWA 動作確認（ビルド → プレビュー → Service Worker 登録確認）
-- [ ] `cc:TODO` E2E 手動テスト（数字選択 → 式入力 → 判定フロー）
+- [x] `cc:done` モバイルレイアウト調整（100dvh、ボタンサイズ 44px 以上）
+- [x] `cc:done` PWA 動作確認（ビルド → プレビュー → Service Worker 登録確認）
+- [x] `cc:done` E2E 手動テスト（数字選択 → 式入力 → 判定フロー）
