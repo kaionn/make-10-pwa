@@ -4,6 +4,8 @@ interface NumberPadProps {
   numbers: NumberEntry[];
   onPress: (index: number) => void;
   puzzleKey?: string;
+  /** Indices of "hinted" numbers (Level 2) -- shown with a visual hint ring */
+  hintedIndices?: number[];
 }
 
 const BUTTON_COLORS = [
@@ -29,11 +31,14 @@ const BUTTON_COLORS = [
   },
 ] as const;
 
-export function NumberPad({ numbers, onPress, puzzleKey = '' }: NumberPadProps) {
+export function NumberPad({ numbers, onPress, puzzleKey = '', hintedIndices }: NumberPadProps) {
+  const hintedSet = new Set(hintedIndices ?? []);
+
   return (
     <div className="grid grid-cols-4 gap-3 px-5">
       {numbers.map((entry, i) => {
         const color = BUTTON_COLORS[i % BUTTON_COLORS.length];
+        const isHinted = hintedSet.has(i);
 
         return (
           <button
@@ -45,7 +50,7 @@ export function NumberPad({ numbers, onPress, puzzleKey = '' }: NumberPadProps) 
               entry.used
                 ? 'bg-slate-100 text-slate-300 line-through shadow-none opacity-30 scale-90'
                 : `${color.bg} ${color.active} text-white shadow-lg ${color.shadow}`
-            } animate-pop-in`}
+            } ${isHinted && !entry.used ? 'ring-3 ring-white ring-offset-2 ring-offset-transparent' : ''} animate-pop-in`}
             style={{
               animationDelay: `${i * 50}ms`,
             }}

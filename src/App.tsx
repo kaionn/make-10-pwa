@@ -3,9 +3,11 @@ import { Display } from './components/Display';
 import { NumberPad } from './components/NumberPad';
 import { OperatorPad } from './components/OperatorPad';
 import { ControlPad } from './components/ControlPad';
+import { ChoiceButtons } from './components/ChoiceButtons';
 import { FeedbackOverlay } from './components/FeedbackOverlay';
 import { GiveUpConfirmDialog } from './components/GiveUpConfirmDialog';
 import { AmbientBackground } from './components/AmbientBackground';
+import { LevelUpOverlay } from './components/LevelUpOverlay';
 import { useMake10 } from './hooks/useMake10';
 
 function App() {
@@ -18,13 +20,22 @@ function App() {
     showGiveUpConfirm,
     celebrationVariant,
     correctMessage,
+    level,
+    showLevelUp,
+    newLevel,
+    fillInBlankPuzzle,
+    partialPuzzle,
+    wrongChoiceIndex,
+    wrongChoiceKey,
     appendDigit,
     appendOperator,
     appendBracket,
     backspace,
     clear,
     judge,
+    selectChoice,
     dismissFeedback,
+    dismissLevelUp,
     requestGiveUp,
     cancelGiveUp,
     confirmGiveUp,
@@ -48,29 +59,69 @@ function App() {
       <AmbientBackground />
 
       <div className="relative z-10 flex h-full flex-col">
-        <Header score={score} />
+        <Header score={score} level={level} />
 
         <div className="flex flex-1 flex-col justify-between pb-6">
           <Display
             expression={expression}
             answer={answerToShow}
+            level={level}
+            fillInBlankTokens={fillInBlankPuzzle?.tokens}
           />
 
           <div className="flex flex-col gap-3">
-            <NumberPad
-              numbers={numbers}
-              onPress={appendDigit}
-              puzzleKey={puzzleKey}
-            />
-            <OperatorPad onOperator={appendOperator} onBracket={appendBracket} />
-            <ControlPad
-              onBackspace={backspace}
-              onClear={clear}
-              onJudge={judge}
-              disabled={controlsDisabled}
-              onGiveUp={requestGiveUp}
-              allNumbersUsed={allNumbersUsed && !controlsDisabled}
-            />
+            {/* Level 1: Choice buttons only (no NumberPad, OperatorPad, ControlPad) */}
+            {level === 1 && fillInBlankPuzzle && (
+              <ChoiceButtons
+                choices={fillInBlankPuzzle.choices}
+                blankType={fillInBlankPuzzle.blankType}
+                onSelect={selectChoice}
+                puzzleKey={puzzleKey}
+                wrongChoiceKey={wrongChoiceKey > 0 ? String(wrongChoiceKey) : null}
+                wrongChoiceIdx={wrongChoiceIndex}
+              />
+            )}
+
+            {/* Level 2: NumberPad (with hinted numbers) + OperatorPad + ControlPad */}
+            {level === 2 && (
+              <>
+                <NumberPad
+                  numbers={numbers}
+                  onPress={appendDigit}
+                  puzzleKey={puzzleKey}
+                  hintedIndices={partialPuzzle?.hintedIndices}
+                />
+                <OperatorPad onOperator={appendOperator} onBracket={appendBracket} />
+                <ControlPad
+                  onBackspace={backspace}
+                  onClear={clear}
+                  onJudge={judge}
+                  disabled={controlsDisabled}
+                  onGiveUp={requestGiveUp}
+                  allNumbersUsed={allNumbersUsed && !controlsDisabled}
+                />
+              </>
+            )}
+
+            {/* Level 3: Full controls (existing layout) */}
+            {level === 3 && (
+              <>
+                <NumberPad
+                  numbers={numbers}
+                  onPress={appendDigit}
+                  puzzleKey={puzzleKey}
+                />
+                <OperatorPad onOperator={appendOperator} onBracket={appendBracket} />
+                <ControlPad
+                  onBackspace={backspace}
+                  onClear={clear}
+                  onJudge={judge}
+                  disabled={controlsDisabled}
+                  onGiveUp={requestGiveUp}
+                  allNumbersUsed={allNumbersUsed && !controlsDisabled}
+                />
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -87,6 +138,12 @@ function App() {
         onConfirm={confirmGiveUp}
         onCancel={cancelGiveUp}
       />
+      {showLevelUp && newLevel && (
+        <LevelUpOverlay
+          newLevel={newLevel}
+          onDismiss={dismissLevelUp}
+        />
+      )}
     </div>
   );
 }

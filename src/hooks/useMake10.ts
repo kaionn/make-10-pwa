@@ -3,10 +3,16 @@ import { generatePuzzle } from '../logic/generatePuzzle';
 import { validateExpression } from '../logic/validator';
 import { evaluate } from '../logic/parser';
 import { solve } from '../logic/solver';
+import { generateFillInBlank } from '../logic/generateFillInBlank';
+import type { FillInBlankPuzzle } from '../logic/generateFillInBlank';
+import { generatePartialPuzzle } from '../logic/generatePartialPuzzle';
+import type { PartialPuzzle } from '../logic/generatePartialPuzzle';
 
 export type Feedback = 'correct' | 'incorrect' | 'answer' | null;
 
 export type CelebrationVariant = 'confetti' | 'starburst' | 'sparkle';
+
+export type Level = 1 | 2 | 3;
 
 const CORRECT_MESSAGES = [
   'すごい! せいかい!',
@@ -20,6 +26,12 @@ const CELEBRATION_VARIANTS: CelebrationVariant[] = ['confetti', 'starburst', 'sp
 
 function pickRandom<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
+}
+
+export function getLevel(score: number): Level {
+  if (score < 5) return 1;
+  if (score < 10) return 2;
+  return 3;
 }
 
 export interface NumberEntry {
@@ -36,6 +48,14 @@ export interface Make10State {
   showGiveUpConfirm: boolean;
   celebrationVariant: CelebrationVariant;
   correctMessage: string;
+  // v3: difficulty system
+  level: Level;
+  showLevelUp: boolean;
+  newLevel: 2 | 3 | null;
+  fillInBlankPuzzle: FillInBlankPuzzle | null;
+  partialPuzzle: PartialPuzzle | null;
+  wrongChoiceIndex: number | null;
+  wrongChoiceKey: number;
 }
 
 const STORAGE_KEY = 'make10-score';
@@ -53,11 +73,11 @@ const saveScore = (score: number): void => {
   try {
     localStorage.setItem(STORAGE_KEY, String(score));
   } catch {
-    // localStorage unavailable — silently ignore
+    // localStorage unavailable -- silently ignore
   }
 };
 
-const createPuzzle = (): { numbers: NumberEntry[]; solutions: string[] } => {
+const createLevel3Puzzle = (): { numbers: NumberEntry[]; solutions: string[] } => {
   const digits = generatePuzzle();
   const solutions = solve(digits);
   return {
@@ -78,20 +98,61 @@ const markUsedNumbers = (expression: string, numbers: NumberEntry[]): NumberEntr
   return numbers.map((n, i) => ({ ...n, used: used[i] }));
 };
 
-export function useMake10() {
-  const [state, setState] = useState<Make10State>(() => {
-    const puzzle = createPuzzle();
+function createInitialState(): Make10State {
+  const score = loadScore();
+  const level = getLevel(score);
+
+  const base: Omit<Make10State, 'expression' | 'numbers' | 'solutions' | 'fillInBlankPuzzle' | 'partialPuzzle'> = {
+    score,
+    feedback: null,
+    showGiveUpConfirm: false,
+    celebrationVariant: 'confetti',
+    correctMessage: CORRECT_MESSAGES[0],
+    level,
+    showLevelUp: false,
+    newLevel: null,
+    wrongChoiceIndex: null,
+    wrongChoiceKey: 0,
+  };
+
+  if (level === 1) {
+    const puzzle = generateFillInBlank();
     return {
+      ...base,
+      expression: '',
+      numbers: puzzle.numbers.map((digit) => ({ digit, used: false })),
+      solutions: puzzle.solutions,
+      fillInBlankPuzzle: puzzle,
+      partialPuzzle: null,
+    };
+  }
+
+  if (level === 2) {
+    const puzzle = generatePartialPuzzle();
+    return {
+      ...base,
       expression: '',
       numbers: puzzle.numbers,
-      score: loadScore(),
-      feedback: null,
       solutions: puzzle.solutions,
-      showGiveUpConfirm: false,
-      celebrationVariant: 'confetti',
-      correctMessage: CORRECT_MESSAGES[0],
+      fillInBlankPuzzle: null,
+      partialPuzzle: puzzle,
     };
-  });
+  }
+
+  // Level 3
+  const puzzle = createLevel3Puzzle();
+  return {
+    ...base,
+    expression: '',
+    numbers: puzzle.numbers,
+    solutions: puzzle.solutions,
+    fillInBlankPuzzle: null,
+    partialPuzzle: null,
+  };
+}
+
+export function useMake10() {
+  const [state, setState] = useState<Make10State>(createInitialState);
 
   useEffect(() => {
     saveScore(state.score);
@@ -101,8 +162,14 @@ export function useMake10() {
     setState((prev) => {
       if (prev.feedback) return prev;
       if (prev.showGiveUpConfirm) return prev;
+
+      // In level 2, prevent editing past pre-filled numbers
       const next = prev.expression + char;
-      return { ...prev, expression: next, numbers: markUsedNumbers(next, prev.numbers.map((n) => ({ ...n, used: false }))) };
+      return {
+        ...prev,
+        expression: next,
+        numbers: markUsedNumbers(next, prev.numbers.map((n) => ({ ...n, used: false }))),
+      };
     });
   }, []);
 
@@ -111,9 +178,14 @@ export function useMake10() {
       if (prev.feedback) return prev;
       if (prev.showGiveUpConfirm) return prev;
       if (prev.numbers[index].used) return prev;
+
       const digit = prev.numbers[index].digit;
       const next = prev.expression + String(digit);
-      return { ...prev, expression: next, numbers: markUsedNumbers(next, prev.numbers.map((n) => ({ ...n, used: false }))) };
+      return {
+        ...prev,
+        expression: next,
+        numbers: markUsedNumbers(next, prev.numbers.map((n) => ({ ...n, used: false }))),
+      };
     });
   }, []);
 
@@ -129,8 +201,13 @@ export function useMake10() {
     setState((prev) => {
       if (prev.feedback) return prev;
       if (prev.showGiveUpConfirm) return prev;
+
       const next = prev.expression.slice(0, -1);
-      return { ...prev, expression: next, numbers: markUsedNumbers(next, prev.numbers.map((n) => ({ ...n, used: false }))) };
+      return {
+        ...prev,
+        expression: next,
+        numbers: markUsedNumbers(next, prev.numbers.map((n) => ({ ...n, used: false }))),
+      };
     });
   }, []);
 
@@ -156,10 +233,12 @@ export function useMake10() {
       try {
         const result = evaluate(prev.expression);
         const isCorrect = Math.abs(result - 10) < 1e-9;
+        const newScore = isCorrect ? prev.score + 1 : prev.score;
+
         return {
           ...prev,
           feedback: isCorrect ? ('correct' as const) : ('incorrect' as const),
-          score: isCorrect ? prev.score + 1 : prev.score,
+          score: newScore,
           celebrationVariant: isCorrect ? pickRandom(CELEBRATION_VARIANTS) : prev.celebrationVariant,
           correctMessage: isCorrect ? pickRandom(CORRECT_MESSAGES) : prev.correctMessage,
         };
@@ -169,25 +248,125 @@ export function useMake10() {
     });
   }, []);
 
-  const nextPuzzle = useCallback(() => {
-    const puzzle = createPuzzle();
-    setState((prev) => ({
-      ...prev,
+  /**
+   * Level 1: handle choice selection for fill-in-the-blank.
+   */
+  const selectChoice = useCallback((choiceIndex: number) => {
+    setState((prev) => {
+      if (prev.feedback) return prev;
+      if (!prev.fillInBlankPuzzle) return prev;
+
+      const puzzle = prev.fillInBlankPuzzle;
+      const selectedChoice = puzzle.choices[choiceIndex];
+      const isCorrect = selectedChoice === puzzle.correctAnswer;
+
+      if (isCorrect) {
+        const newScore = prev.score + 1;
+        return {
+          ...prev,
+          feedback: 'correct' as const,
+          score: newScore,
+          celebrationVariant: pickRandom(CELEBRATION_VARIANTS),
+          correctMessage: pickRandom(CORRECT_MESSAGES),
+          wrongChoiceIndex: null,
+        };
+      }
+
+      // Wrong answer: shake the button, allow retry
+      return {
+        ...prev,
+        wrongChoiceIndex: choiceIndex,
+        wrongChoiceKey: prev.wrongChoiceKey + 1,
+      };
+    });
+  }, []);
+
+  const generateNextPuzzle = useCallback((level: Level): Partial<Make10State> => {
+    if (level === 1) {
+      const puzzle = generateFillInBlank();
+      return {
+        expression: '',
+        numbers: puzzle.numbers.map((digit) => ({ digit, used: false })),
+        solutions: puzzle.solutions,
+        fillInBlankPuzzle: puzzle,
+        partialPuzzle: null,
+        feedback: null,
+        showGiveUpConfirm: false,
+        wrongChoiceIndex: null,
+      };
+    }
+
+    if (level === 2) {
+      const puzzle = generatePartialPuzzle();
+      return {
+        expression: '',
+        numbers: puzzle.numbers,
+        solutions: puzzle.solutions,
+        fillInBlankPuzzle: null,
+        partialPuzzle: puzzle,
+        feedback: null,
+        showGiveUpConfirm: false,
+        wrongChoiceIndex: null,
+      };
+    }
+
+    // Level 3
+    const puzzle = createLevel3Puzzle();
+    return {
       expression: '',
       numbers: puzzle.numbers,
       solutions: puzzle.solutions,
+      fillInBlankPuzzle: null,
+      partialPuzzle: null,
       feedback: null,
       showGiveUpConfirm: false,
-    }));
+      wrongChoiceIndex: null,
+    };
   }, []);
 
   const dismissFeedback = useCallback(() => {
-    if (state.feedback === 'correct' || state.feedback === 'answer') {
-      nextPuzzle();
-    } else {
-      setState((prev) => ({ ...prev, feedback: null }));
-    }
-  }, [state.feedback, nextPuzzle]);
+    setState((prev) => {
+      if (prev.feedback === 'correct' || prev.feedback === 'answer') {
+        // Check for level-up
+        const oldLevel = prev.level;
+        const newLevel = getLevel(prev.score);
+
+        if (newLevel > oldLevel) {
+          // Show level-up overlay before advancing
+          return {
+            ...prev,
+            feedback: null,
+            showLevelUp: true,
+            newLevel: newLevel as 2 | 3,
+            level: newLevel,
+          };
+        }
+
+        // No level-up: advance to next puzzle
+        const nextPuzzleState = generateNextPuzzle(newLevel);
+        return {
+          ...prev,
+          ...nextPuzzleState,
+          level: newLevel,
+        };
+      }
+
+      // Incorrect: dismiss and allow retry
+      return { ...prev, feedback: null };
+    });
+  }, [generateNextPuzzle]);
+
+  const dismissLevelUp = useCallback(() => {
+    setState((prev) => {
+      const nextPuzzleState = generateNextPuzzle(prev.level);
+      return {
+        ...prev,
+        ...nextPuzzleState,
+        showLevelUp: false,
+        newLevel: null,
+      };
+    });
+  }, [generateNextPuzzle]);
 
   // Give up flow
   const requestGiveUp = useCallback(() => {
@@ -217,7 +396,9 @@ export function useMake10() {
     backspace,
     clear,
     judge,
+    selectChoice,
     dismissFeedback,
+    dismissLevelUp,
     requestGiveUp,
     cancelGiveUp,
     confirmGiveUp,

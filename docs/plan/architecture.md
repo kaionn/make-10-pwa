@@ -1,14 +1,17 @@
-# Architecture: Make 10 -- v2 アニメーション強化 & ギブアップ機能
+# Architecture: Make 10 -- v3 難易度プログレッション
 
 ## 1. 変更の概要
 
-v2 では以下の 3 つの機能を追加する:
+v3 では段階的な難易度システムを追加する:
 
-1. ギブアップ機能（答え参照 + 次の問題へ進む）
-2. 答え生成ロジック（solver モジュール）
-3. アニメーション強化（アンビエント背景、文字バウンス、アイドルアニメーション、祝福バリエーション）
+1. 3段階の難易度レベル（超かんたん / かんたん / ふつう）
+2. レベル 1「超かんたん」: 穴埋め形式の出題ロジックと UI
+3. レベル 2「かんたん」: 部分組み立て形式の出題ロジックと UI
+4. レベル 3「ふつう」: 現行と同一（変更なし）
+5. レベルアップ演出オーバーレイ
+6. ヘッダーにレベル表示とプログレスドット
 
-既存のゲームロジック（正解判定、スコア計算、式パース）には手を入れない。UI 層の拡張と、新規 solver モジュールの追加が中心となる。
+スコア（星の数）に基づく自動昇格のみ。手動でのレベル選択は設けない。レベルダウンもない。
 
 ## 2. 変更しないもの
 
@@ -16,219 +19,270 @@ v2 では以下の 3 つの機能を追加する:
 
 - `src/logic/parser.ts` -- 式パーサー
 - `src/logic/validator.ts` -- 式バリデーター
-- `src/logic/generatePuzzle.ts` -- 問題生成
-- `src/data/solvableCombinations.ts` -- 解ける組み合わせデータ
+- `src/logic/generatePuzzle.ts` -- 問題生成（全レベルで使用）
+- `src/logic/solver.ts` -- 答え生成ロジック（全レベルで使用）
+- `src/data/solvableCombinations.ts` -- 553 エントリの解ける組み合わせデータ
 - `vite.config.ts` -- PWA 設定を含むビルド設定
 - `src/main.tsx` -- エントリーポイント
-- `index.html` -- Google Fonts の link タグは追加済み
+- `index.html` -- 変更なし
 - `src/components/OperatorPad.tsx` -- 変更なし
+- `src/components/AmbientBackground.tsx` -- 変更なし
+- `src/components/GiveUpConfirmDialog.tsx` -- 変更なし
+- `src/components/FeedbackOverlay.tsx` -- 変更なし
 
-## 3. 新規モジュール
+## 3. 難易度レベルシステム設計
 
-### 3.1 src/logic/solver.ts -- 答え生成ロジック
+### 3.1 レベル定義
 
-与えられた 4 つの数字に対して、10 を作る有効な式をすべて算出する。
+| レベル | 名前 | 星の範囲 | 表示テキスト | 色 |
+|--------|------|----------|------------|-----|
+| 1 | 超かんたん | 0〜4 | ちょうかんたん | emerald-500 |
+| 2 | かんたん | 5〜9 | かんたん | sky-500 |
+| 3 | ふつう | 10〜 | ふつう | violet-500 |
 
-アルゴリズム:
-1. 4 つの数字の全順列を生成（最大 24 通り）
-2. 3 つの演算子スロットに対して、4 種類の演算子（+, -, x, /）の全組み合わせを生成（64 通り）
-3. 括弧パターンを網羅（括弧なし + 5 種類の括弧配置 = 6 パターン）
-4. 各組み合わせを評価し、結果が 10 になるものを収集
-5. 重複を除去し、なるべくシンプルな式を優先してソート
-
-括弧パターン:
-- `a ○ b ○ c ○ d` （括弧なし）
-- `(a ○ b) ○ c ○ d`
-- `a ○ (b ○ c) ○ d`
-- `a ○ b ○ (c ○ d)`
-- `(a ○ b) ○ (c ○ d)`
-- `(a ○ b ○ c) ○ d` → `((a ○ b) ○ c) ○ d` と `(a ○ (b ○ c)) ○ d`
-- `a ○ (b ○ c ○ d)` → `a ○ ((b ○ c) ○ d)` と `a ○ (b ○ (c ○ d))`
-
-式の表記:
-- 全角演算子（×, ÷）を使用（ユーザー入力と同じ表記）
-- 不要な括弧は除去してシンプルに表示
-
-API:
-```typescript
-export function solve(numbers: number[]): string[]
-```
-
-パフォーマンス:
-- 出題時に事前計算（generatePuzzle 呼び出し直後）
-- 最悪ケースでも 24 x 64 x 11 = 16,896 パターンの評価のみ
-- ギブアップタップ時はゼロ遅延で表示
-
-### 3.2 src/components/AmbientBackground.tsx -- 背景浮遊装飾
-
-純粋な CSS アニメーションで実装する背景装飾コンポーネント。
-
-構成:
-- 8 個の装飾要素（丸、星、三角形）を `position: fixed` で配置
-- `pointer-events: none` / `z-index: 0` でインタラクションをブロックしない
-- `aria-hidden="true"` でスクリーンリーダーから隠す
-- `will-change: transform` で GPU レイヤーに昇格
-
-形状の実装:
-- 丸: `border-radius: 50%`
-- 星: CSS `clip-path` polygon
-- 三角形: CSS `clip-path` polygon
-
-### 3.3 src/components/GiveUpConfirmDialog.tsx -- 確認ダイアログ
-
-ギブアップの誤タップ防止用モーダルダイアログ。
-
-Props:
-- `open: boolean` -- 表示/非表示
-- `onConfirm: () => void` -- 「こたえを みる」タップ
-- `onCancel: () => void` -- 「まだ がんばる」タップ
-
-アクセシビリティ:
-- `role="dialog"` / `aria-modal="true"` / `aria-labelledby`
-
-### 3.4 src/hooks/useIdle.ts -- アイドル検出フック
-
-操作がない時間を検出する専用フック。
+### 3.2 レベル計算ロジック
 
 ```typescript
-export function useIdle(timeoutMs: number): {
-  isIdle: boolean;
-  resetIdle: () => void;
+type Level = 1 | 2 | 3;
+
+function getLevel(score: number): Level {
+  if (score < 5) return 1;
+  if (score < 10) return 2;
+  return 3;
 }
 ```
 
-実装:
-- `useRef` + `setInterval(1000ms)` で最後の操作からの経過時間を追跡
-- `timeoutMs`（デフォルト 5000ms）を超えるとアイドル状態
-- `resetIdle()` で即座にリセット
+レベルは一方向のみ昇格する。レベルアップは星 5 到達時（1 → 2）と星 10 到達時（2 → 3）に発生する。
 
-## 4. 既存ファイルの変更
+### 3.3 レベル別 UI 構成
 
-### 4.1 src/hooks/useMake10.ts
+| ゾーン | レベル 1 | レベル 2 | レベル 3 |
+|--------|---------|---------|---------|
+| Header | レベル名 + プログレスドット + スコア | 同左 | 同左（ドットなし） |
+| Display | 穴埋め式 + BlankSlot + "= 10" | 通常の式表示 | 通常の式表示 |
+| Input | ChoiceButtons | NumberPad(4列, 2つdisabled) + OperatorPad + ControlPad | NumberPad + OperatorPad + ControlPad |
+| ControlPad | 非表示 | 表示（ギブアップあり） | 表示（ギブアップあり） |
+
+## 4. 新規モジュール
+
+### 4.1 src/logic/generateFillInBlank.ts -- 穴埋め問題生成
+
+solver が算出した正解式を 1 つ選び、空欄を 1 箇所作成する。
+
+```typescript
+export interface FillInBlankPuzzle {
+  numbers: number[];           // 出題の 4 数字
+  expression: string;          // 空欄を含む表示用文字列（空欄は placeholder で表現）
+  tokens: ExpressionToken[];   // 式のトークン列（表示用）
+  blankIndex: number;          // tokens 内の空欄位置
+  blankType: 'operator' | 'number';
+  choices: string[];           // 選択肢（3〜4 個）
+  correctAnswer: string;       // 正解の文字列
+  solutions: string[];         // 元の正解式一覧
+}
+
+export interface ExpressionToken {
+  type: 'number' | 'operator' | 'paren';
+  value: string;
+  isBlank: boolean;
+}
+```
+
+ロジック:
+1. generatePuzzle() で 4 数字を選出
+2. solve() で正解式を算出
+3. 最もシンプルな正解式（括弧なし or 括弧最少）を選択
+4. 式をトークンに分解し、ランダムに 1 箇所を空欄にする
+5. 空欄が演算子の場合: 選択肢は 4 つの演算子（+, -, x, /）
+6. 空欄が数字の場合: 正解 + ダミー 2〜3 つ（元の 4 数字から選択 + 問題に含まれない数字）
+
+### 4.2 src/logic/generatePartialPuzzle.ts -- 部分組み立て問題生成
+
+solver の正解式から 2 つの数字を配置済みにした状態を生成する。
+
+```typescript
+export interface PartialPuzzle {
+  numbers: NumberEntry[];        // 4 数字（うち 2 つが used: true）
+  prefilledIndices: number[];    // 配置済みの numbers インデックス
+  solutions: string[];           // 正解式一覧
+}
+```
+
+ロジック:
+1. generatePuzzle() で 4 数字を選出
+2. solve() で正解式を算出
+3. 4 つの数字のうち 2 つをランダムに選んで used: true にする
+4. 配置済みの数字は NumberPad 上で disabled 表示
+
+### 4.3 src/components/ChoiceButtons.tsx -- 選択肢ボタン
+
+Level 1 で表示する選択肢ボタン群。
+
+Props:
+- `choices: string[]` -- 選択肢（3〜4 個）
+- `onSelect: (index: number) => void` -- 選択時コールバック
+- `puzzleKey: string` -- アニメーションリセット用キー
+
+レイアウト: 2 列グリッド、ボタン高さ 80px、4 色ポップカラー（rose, sky, emerald, amber）。
+
+### 4.4 src/components/LevelIndicator.tsx -- レベル表示
+
+ヘッダー内に配置するレベル名とプログレスドット。
+
+Props:
+- `level: 1 | 2 | 3`
+- `score: number`
+
+表示:
+- レベル名テキスト（ひらがな）
+- プログレスドット（レベル 1,2: 5 個 / レベル 3: なし）
+
+### 4.5 src/components/LevelUpOverlay.tsx -- レベルアップ演出
+
+レベル昇格時の全画面祝福オーバーレイ。
+
+Props:
+- `newLevel: 2 | 3`
+- `onDismiss: () => void`
+
+要素:
+- 紫系グラデーション背景
+- 「レベルアップ!」テキスト
+- 新レベル名バッジ
+- 励ましメッセージ（レベルに応じた文言）
+- キラキラパーティクル
+- タップで閉じる
+
+## 5. 既存ファイルの変更
+
+### 5.1 src/hooks/useMake10.ts
 
 追加する状態:
-- `solutions: string[]` -- 現在の問題の正解式（出題時に事前計算）
-- `showGiveUpConfirm: boolean` -- 確認ダイアログの表示/非表示
-- `isShowingAnswer: boolean` -- 答え表示オーバーレイの表示/非表示
+- `level: 1 | 2 | 3` -- 現在のレベル（score から導出）
+- `showLevelUp: boolean` -- レベルアップオーバーレイの表示
+- `newLevel: 2 | 3 | null` -- 昇格先レベル
+- `fillInBlankPuzzle: FillInBlankPuzzle | null` -- Level 1 用パズルデータ
+- `partialPuzzle: PartialPuzzle | null` -- Level 2 用パズルデータ
 
 追加する操作:
-- `requestGiveUp()` -- 確認ダイアログを表示
-- `cancelGiveUp()` -- 確認ダイアログを閉じる
-- `confirmGiveUp()` -- 答えを表示
-- `dismissAnswer()` -- 答え表示を閉じて次の問題へ
+- `selectChoice(index: number)` -- Level 1 の選択肢タップ
+- `dismissLevelUp()` -- レベルアップオーバーレイを閉じて次の問題へ
 
-既存の Feedback 型を拡張:
-- `'correct' | 'incorrect' | 'answer' | null`
+変更するロジック:
+- `createPuzzle` がレベルに応じた問題を生成
+- `judge` でレベルアップ判定を追加
+- `nextPuzzle` でレベルに応じた問題を再生成
+- `dismissFeedback` でレベルアップチェックを追加
 
-### 4.2 src/components/ControlPad.tsx
+localStorage:
+- 既存の `make10-score` キーでスコアを永続化（変更なし）
 
-- グリッドを 3 列 → 4 列に変更
-- 先頭に「こたえを みる」ボタンを追加
-- `onGiveUp: () => void` prop を追加（オプショナル）
+### 5.2 src/components/Header.tsx
 
-### 4.3 src/components/Display.tsx
+- LevelIndicator コンポーネントをインポートして配置
+- Props に `level` と `score` を追加（score は既存）
 
-- 式テキストを各文字ごとに `<span>` でラップし、新規文字に `animate-char-bounce` を適用
-- `answer` prop（オプショナル）を追加し、答え表示時に表示
-- `isIdle` prop でプレースホルダーのフェードアニメーションを制御
-- `allNumbersUsed` prop で = ボタンパルスの判定に利用（ControlPad に渡す用途）
+### 5.3 src/components/Display.tsx
 
-### 4.4 src/components/FeedbackOverlay.tsx
+- Level 1 表示モード追加: ExpressionToken 列を受け取り、BlankSlot を含む式を表示
+- Level 2 表示: 通常の式表示と同じ（プレースホルダーのみ変更）
+- Level 3: 変更なし
 
-- `feedback` 型に `'answer'` を追加
-- 答え表示オーバーレイ（📖、sky-to-indigo グラデーション、答えカード）
-- 正解メッセージのランダムバリエーション（5 種類）
-- 祝福演出のバリエーション（confetti / starburst / sparkle からランダム選択）
+### 5.4 src/App.tsx
 
-### 4.5 src/components/NumberPad.tsx
+- レベルに応じた条件分岐で入力エリアを切り替え
+- Level 1: Display(穴埋め) + ChoiceButtons
+- Level 2: Display + NumberPad(4列, 2つ disabled) + OperatorPad + ControlPad
+- Level 3: 現行と同一
+- LevelUpOverlay を条件付きレンダリング
 
-- `isIdle` prop を追加（オプショナル）
-- アイドル時に未使用ボタンに `animate-idle-bounce` を適用
-- `animation-delay` をボタンごとにずらし（0s, 0.5s, 1.0s, 1.5s）
-
-### 4.6 src/components/Header.tsx
-
-- `isIdle` prop を追加（オプショナル）
-- アイドル時に星マークに `animate-star-twinkle` を適用
-
-### 4.7 src/index.css
+### 5.5 src/index.css
 
 追加する keyframes:
-- `@keyframes ambient-float-1` / `ambient-float-2` / `ambient-float-3` -- 背景装飾の浮遊
-- `@keyframes char-bounce` -- 式入力時の文字バウンス
-- `@keyframes pulse-glow` -- = ボタンのパルス
-- `@keyframes idle-bounce` -- アイドル時のボタン揺れ
-- `@keyframes placeholder-fade` -- プレースホルダーの明滅
-- `@keyframes starburst` -- 星放射の祝福演出
-- `@keyframes sparkle` -- キラキラの祝福演出
-- `@keyframes star-twinkle` -- ヘッダー星の瞬き
+- `@keyframes blank-pulse` -- 空欄スロットの枠線パルス
+- `@keyframes choice-shake` -- 不正解時の選択肢シェイク
+- `@keyframes level-up-pop` -- レベルアップカードのポップイン
+- `@keyframes dot-pop` -- プログレスドットのポップ
 
-既存の `@media (prefers-reduced-motion)` ルールですべて無効化される。
+すべて `prefers-reduced-motion: reduce` で無効化。
 
-### 4.8 src/App.tsx
+## 6. 状態管理フロー
 
-- `AmbientBackground` をルートの最初の子要素として配置
-- `GiveUpConfirmDialog` を条件付きレンダリング
-- `useIdle` フックを使用してアイドル状態を管理
-- 各コンポーネントに `isIdle` / `allNumbersUsed` / `answer` 等の新 props を渡す
-
-## 5. 状態管理フロー
-
-### 5.1 ギブアップフロー
+### 6.1 レベル判定フロー
 
 ```
-入力中
-  ├→ requestGiveUp()  → showGiveUpConfirm = true
-  │   ├→ cancelGiveUp()   → showGiveUpConfirm = false （入力中に戻る）
-  │   └→ confirmGiveUp()  → showGiveUpConfirm = false, feedback = 'answer'
-  │       └→ dismissAnswer()  → feedback = null, 次の問題生成
+score 変化
+  → getLevel(score) で新レベルを算出
+  → 新レベル > 前レベル ?
+    → yes: showLevelUp = true, newLevel = 新レベル
+    → no: 通常遷移
 ```
 
-### 5.2 アイドル検出フロー
+### 6.2 Level 1 プレイフロー
 
 ```
-任意の操作 → resetIdle() → isIdle = false
-5秒間操作なし → isIdle = true
-  ├→ NumberPad: 未使用ボタンが idle-bounce
-  ├→ Header: 星が star-twinkle
-  └→ Display: プレースホルダーが placeholder-fade
+問題生成 → FillInBlankPuzzle を作成
+  → Display に穴埋め式を表示
+  → ChoiceButtons に選択肢を表示
+  → selectChoice(index)
+    → 正解 ? → score+1 → feedback='correct' → レベルアップ判定
+    → 不正解 ? → 選択肢をシェイク（同じ問題で再挑戦）
 ```
 
-## 6. アニメーション戦略
+### 6.3 Level 2 プレイフロー
 
-すべてのアニメーションを CSS キーフレーム + Tailwind トランジションで実装する。JS アニメーションライブラリは追加しない。
+```
+問題生成 → PartialPuzzle を作成
+  → NumberPad に 4 数字（2つ disabled）
+  → OperatorPad + ControlPad 表示
+  → 通常の式入力フロー
+  → judge() → 正解/不正解判定 → レベルアップ判定
+```
 
-| アニメーション | 実装方法 | トリガー | v1/v2 |
-|---------------|---------|---------|-------|
-| ボタンタップ | `active:scale-[0.92]` | CSS `:active` | v1 |
-| スコアバウンス | `@keyframes score-bounce` | score 変化 | v1 |
-| 数字ポップイン | `@keyframes pop-in` | puzzleKey 変化 | v1 |
-| 紙吹雪 | `@keyframes confetti-fall-v2` | 正解判定時 | v1 |
-| アンビエント浮遊 | `@keyframes ambient-float-*` | 常時 | v2 |
-| 文字バウンス | `@keyframes char-bounce` | 式に文字追加時 | v2 |
-| パルスグロー | `@keyframes pulse-glow` | 全数字使用時 | v2 |
-| アイドルバウンス | `@keyframes idle-bounce` | 5 秒間操作なし | v2 |
-| プレースホルダーフェード | `@keyframes placeholder-fade` | 式が空 + アイドル | v2 |
-| 星キラキラ | `@keyframes star-twinkle` | アイドル時 | v2 |
-| スターバースト | `@keyframes starburst` | 正解時（ランダム） | v2 |
-| キラキラ | `@keyframes sparkle` | 正解時（ランダム） | v2 |
+### 6.4 Level 3 プレイフロー
+
+```
+現行と同一。変更なし。
+```
+
+### 6.5 レベルアップフロー
+
+```
+正解 → score+1 → feedback='correct'
+  → dismissFeedback()
+    → レベルアップ判定
+      → yes: showLevelUp = true（正解オーバーレイの後）
+      → no: 次の問題生成
+  → dismissLevelUp()
+    → showLevelUp = false
+    → 新しいレベルの問題を生成
+```
+
+## 7. アニメーション戦略
+
+v2 の全アニメーションを維持したまま、v3 のアニメーションを追加する。
+
+| アニメーション | 実装方法 | トリガー | バージョン |
+|---------------|---------|---------|-----------|
+| 空欄パルス | `@keyframes blank-pulse` | 常時（Level 1 の空欄） | v3 |
+| 選択肢シェイク | `@keyframes choice-shake` | 不正解選択時 | v3 |
+| レベルアップポップ | `@keyframes level-up-pop` | レベル昇格時 | v3 |
+| ドットポップ | `@keyframes dot-pop` | スコア加算時 | v3 |
 
 `prefers-reduced-motion: reduce` ですべて無効化。
 
-## 7. パフォーマンス考慮
+## 8. パフォーマンス考慮
 
-- solver の計算は出題時に完了（ギブアップ時はゼロ遅延）
-- アンビエント背景: CSS-only、`will-change: transform`、要素数 8 個以下
-- 文字バウンス: `<span>` ラップだが React の reconciliation で最小 DOM 更新
-- アイドル検出: `setInterval(1000ms)` の軽微な負荷
-- 祝福演出: CSS ベース（JS ライブラリ不使用）
-- 全アニメーション: `transform` と `opacity` のみ変化（layout/paint 再計算なし）
+- 穴埋め問題の生成: solver の計算は出題時に完了。選択肢生成も出題時
+- Level 2 の部分組み立て: 既存の solver + 数字の pre-selection のみ
+- レベル判定: 単純な数値比較（O(1)）
+- レベルアップ演出: CSS ベース（JS ライブラリ不使用）
+- 全アニメーション: `transform` と `opacity` のみ変化
 
-## 8. アクセシビリティ
+## 9. アクセシビリティ
 
-- ギブアップボタン: `aria-label="こたえを みる"`
-- 確認ダイアログ: `role="dialog"` / `aria-modal="true"` / `aria-labelledby`
-- 答え表示: `aria-live="polite"`
-- アンビエント背景: `aria-hidden="true"`
-- 祝福演出要素: `aria-hidden="true"`
+- 空欄スロット: `aria-label="えらんでね"`
+- 選択肢ボタン: `aria-label` 付与（演算子: 「たす」「ひく」「かける」「わる」、数字: そのまま）
+- レベルアップオーバーレイ: `role="dialog"` / `aria-modal="true"` / `aria-label="レベルアップ"`
+- プログレスドット: `aria-label` で進捗を通知
 - `prefers-reduced-motion` で全アニメーション無効化
