@@ -1,4 +1,96 @@
-# Architecture: Make 10 -- v3 難易度プログレッション
+# Architecture: Make 10 -- v3 難易度プログレッション + v4 ゲーム開始画面
+
+## 0. v4 変更の概要
+
+v4 ではゲームの「顔」となる要素を追加する:
+
+1. TitleScreen コンポーネント -- アプリ起動時に表示する全画面オーバーレイ
+2. favicon の刷新 -- 「10」モチーフの SVG favicon
+3. PWA アイコンの刷新 -- maskable アイコンを追加、manifest 設定の更新
+4. タイトルスクリーンのアニメーション -- ポップイン、パルス、浮遊デコレーション
+5. 継続プレイ表示 -- スコア > 0 のとき「つづける」メッセージを表示
+
+### 0.1 v4 で変更するファイル
+
+| ファイル | 変更内容 |
+|---------|---------|
+| `src/components/TitleScreen.tsx` | 新規: ゲーム開始画面コンポーネント |
+| `src/App.tsx` | `showTitle` state 追加、TitleScreen の条件付きレンダリング |
+| `src/index.css` | v4 keyframes 追加（title-pop-in, start-pulse） |
+| `public/favicon.svg` | 新規: 「10」モチーフの SVG favicon |
+| `public/icons/icon-192.svg` | 新規: SVG ベースの PWA アイコン（192px 相当） |
+| `public/icons/icon-512.svg` | 新規: SVG ベースの PWA アイコン（512px 相当） |
+| `public/icons/icon-maskable-192.svg` | 新規: maskable SVG アイコン |
+| `public/icons/icon-maskable-512.svg` | 新規: maskable SVG アイコン |
+| `index.html` | favicon の参照先を `/vite.svg` から `/favicon.svg` に変更 |
+| `vite.config.ts` | PWA manifest の icons 配列に maskable アイコンを追加、theme_color / background_color を更新 |
+
+### 0.2 v4 で変更しないもの
+
+v3 以前のゲームロジック、出題ロジック、レベルシステムはすべて変更なし。タイトルスクリーンはルーティングなしの条件分岐で実装する。
+
+### 0.3 TitleScreen コンポーネント設計
+
+```typescript
+interface TitleScreenProps {
+  score: number;
+  onStart: () => void;
+}
+```
+
+状態:
+- `isFadingOut: boolean` -- フェードアウト中かどうか
+
+動作:
+1. スタートボタンタップ → `isFadingOut = true` → opacity 0 に遷移（300ms）
+2. `transitionend` イベント → `onStart()` コールバック呼び出し
+3. App.tsx で `showTitle = false` → TitleScreen が DOM から除去
+
+構成要素:
+- AmbientBackground（ゲーム本体と共有のインスタンス）
+- 浮遊デコレーション（数字・演算子、opacity 0.06〜0.10、S10）
+- タイトル「Make 10」（Nunito 800, text-5xl, グラデーション文字色）
+- サブタイトル「4つの すうじで 10を つくろう!」（slate-600）
+- スタートボタン（orange-to-pink グラデーション、パルスアニメーション）
+- 継続プレイ表示（score > 0 の場合のみ、S11）
+- フッター「Make 10 Puzzle」（slate-400, text-xs）
+
+### 0.4 App.tsx の状態管理
+
+```typescript
+const [showTitle, setShowTitle] = useState(true);
+
+const handleStart = useCallback(() => {
+  setShowTitle(false);
+}, []);
+```
+
+TitleScreen は z-50 のオーバーレイとして配置。ゲーム本体は背後に常にレンダリング済み。
+
+### 0.5 favicon / PWA アイコン
+
+favicon:
+- パス: `public/favicon.svg`
+- viewBox: 0 0 32 32
+- 角丸四角形（rx=6）+ linearGradient（orange-400 → pink-500）+ 白文字「10」
+
+PWA アイコン:
+- SVG ベースで作成（PNG 生成は外部ツールに委ねる）
+- 通常アイコン: 角丸背景 + 「10」テキスト
+- maskable アイコン: 全面塗りつぶし背景 + セーフゾーン内に「10」テキスト
+
+### 0.6 v4 アニメーション
+
+| アニメーション | 実装方法 | トリガー |
+|---------------|---------|---------|
+| タイトルポップイン | `@keyframes title-pop-in` | タイトルスクリーン表示時 |
+| スタートボタンパルス | `@keyframes start-pulse` | タイトルスクリーン表示中（infinite） |
+| フェードアウト | CSS transition (opacity 300ms) | スタートボタンタップ時 |
+| 浮遊デコレーション | 既存 ambient-float を再利用 | 常時 |
+
+`prefers-reduced-motion: reduce` ですべて無効化。
+
+---
 
 ## 1. 変更の概要
 
@@ -22,9 +114,9 @@ v3 では段階的な難易度システムを追加する:
 - `src/logic/generatePuzzle.ts` -- 問題生成（全レベルで使用）
 - `src/logic/solver.ts` -- 答え生成ロジック（全レベルで使用）
 - `src/data/solvableCombinations.ts` -- 553 エントリの解ける組み合わせデータ
-- `vite.config.ts` -- PWA 設定を含むビルド設定
+- `vite.config.ts` -- PWA 設定を含むビルド設定（v4 で変更）
 - `src/main.tsx` -- エントリーポイント
-- `index.html` -- 変更なし
+- `index.html` -- v3 では変更なし（v4 で favicon 参照を変更）
 - `src/components/OperatorPad.tsx` -- 変更なし
 - `src/components/AmbientBackground.tsx` -- 変更なし
 - `src/components/GiveUpConfirmDialog.tsx` -- 変更なし

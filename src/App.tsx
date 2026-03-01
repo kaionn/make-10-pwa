@@ -1,3 +1,4 @@
+import { useCallback, useState } from 'react';
 import { Header } from './components/Header';
 import { Display } from './components/Display';
 import { NumberPad } from './components/NumberPad';
@@ -8,9 +9,15 @@ import { FeedbackOverlay } from './components/FeedbackOverlay';
 import { GiveUpConfirmDialog } from './components/GiveUpConfirmDialog';
 import { AmbientBackground } from './components/AmbientBackground';
 import { LevelUpOverlay } from './components/LevelUpOverlay';
+import { TitleScreen } from './components/TitleScreen';
 import { useMake10 } from './hooks/useMake10';
 
 function App() {
+  const [showTitle, setShowTitle] = useState(true);
+
+  const handleStart = useCallback(() => {
+    setShowTitle(false);
+  }, []);
   const {
     expression,
     numbers,
@@ -143,6 +150,9 @@ function App() {
           newLevel={newLevel}
           onDismiss={dismissLevelUp}
         />
+      )}
+      {showTitle && (
+        <TitleScreen score={score} onStart={handleStart} />
       )}
     </div>
   );

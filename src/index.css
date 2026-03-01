@@ -322,6 +322,30 @@ body {
   will-change: transform, opacity;
 }
 
+/* ---- v4: Title pop-in animation ---- */
+
+@keyframes title-pop-in {
+  0%   { transform: scale(0.3); opacity: 0; }
+  50%  { transform: scale(1.08); opacity: 1; }
+  70%  { transform: scale(0.95); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.animate-title-pop-in {
+  animation: title-pop-in 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ---- v4: Start button pulse animation ---- */
+
+@keyframes start-pulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.05); }
+}
+
+.animate-start-pulse {
+  animation: start-pulse 2s ease-in-out infinite;
+}
+
 /* ---- Reduced motion ---- */
 
 @media (prefers-reduced-motion: reduce) {
