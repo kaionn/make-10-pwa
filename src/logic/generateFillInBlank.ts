@@ -7,14 +7,23 @@ export interface ExpressionToken {
   isBlank: boolean;
 }
 
+export interface BlankInfo {
+  index: number;
+  type: 'operator' | 'number';
+  correctAnswer: string;
+  choices: string[];
+}
+
 export interface FillInBlankPuzzle {
   numbers: number[];
   tokens: ExpressionToken[];
+  blanks: BlankInfo[];
+  solutions: string[];
+  // Backward-compatible aliases (derived from blanks[0])
   blankIndex: number;
   blankType: 'operator' | 'number';
   choices: string[];
   correctAnswer: string;
-  solutions: string[];
 }
 
 const OPERATORS = new Set(['+', '-', '×', '÷']);
@@ -107,10 +116,17 @@ function findBlankablePositions(tokens: ExpressionToken[]): number[] {
 }
 
 /**
+ * Check if two positions are adjacent in the token array.
+ */
+function areAdjacent(a: number, b: number): boolean {
+  return Math.abs(a - b) === 1;
+}
+
+/**
  * Generate a fill-in-the-blank puzzle for Level 1.
  *
  * Selects the simplest solution (fewest brackets), tokenizes it,
- * blanks out one position, and generates choices.
+ * blanks out TWO positions, and generates choices for each.
  */
 export function generateFillInBlank(): FillInBlankPuzzle {
   const digits = generatePuzzle();
@@ -122,32 +138,69 @@ export function generateFillInBlank(): FillInBlankPuzzle {
   const tokens = tokenize(expr);
   const blankablePositions = findBlankablePositions(tokens);
 
-  // Pick a random position to blank out
-  const blankIndex = blankablePositions[Math.floor(Math.random() * blankablePositions.length)];
-  const blankToken = tokens[blankIndex];
+  // Pick 2 random positions to blank out
+  let pos1: number = blankablePositions[0];
+  let pos2: number = blankablePositions.length >= 2 ? blankablePositions[1] : blankablePositions[0];
 
-  // Mark the token as blank
+  if (blankablePositions.length >= 2) {
+    // Try to pick non-adjacent positions first
+    const shuffledPositions = shuffle(blankablePositions);
+    let found = false;
+
+    for (let i = 0; i < shuffledPositions.length && !found; i++) {
+      for (let j = i + 1; j < shuffledPositions.length && !found; j++) {
+        if (!areAdjacent(shuffledPositions[i], shuffledPositions[j])) {
+          pos1 = Math.min(shuffledPositions[i], shuffledPositions[j]);
+          pos2 = Math.max(shuffledPositions[i], shuffledPositions[j]);
+          found = true;
+        }
+      }
+    }
+
+    // If all blankable positions are adjacent, just pick any 2
+    if (!found) {
+      const picked = shuffle(blankablePositions).slice(0, 2).sort((a, b) => a - b);
+      pos1 = picked[0];
+      pos2 = picked[1];
+    }
+  }
+
+  // Mark the tokens as blank
   const resultTokens = tokens.map((t, i) =>
-    i === blankIndex ? { ...t, isBlank: true } : t
+    (i === pos1 || i === pos2) ? { ...t, isBlank: true } : t
   );
 
-  const blankType = blankToken.type === 'operator' ? 'operator' as const : 'number' as const;
-  const correctAnswer = blankToken.value;
+  // Build BlankInfo for each blank (sorted left to right)
+  const blankPositions = [pos1, pos2];
+  const blanks: BlankInfo[] = blankPositions.map((pos) => {
+    const token = tokens[pos];
+    const blankType = token.type === 'operator' ? 'operator' as const : 'number' as const;
+    const correctAnswer = token.value;
 
-  let choices: string[];
-  if (blankType === 'operator') {
-    choices = generateOperatorChoices(correctAnswer);
-  } else {
-    choices = generateNumberChoices(correctAnswer, digits);
-  }
+    let choices: string[];
+    if (blankType === 'operator') {
+      choices = generateOperatorChoices(correctAnswer);
+    } else {
+      choices = generateNumberChoices(correctAnswer, digits);
+    }
+
+    return {
+      index: pos,
+      type: blankType,
+      correctAnswer,
+      choices,
+    };
+  });
 
   return {
     numbers: digits,
     tokens: resultTokens,
-    blankIndex,
-    blankType,
-    choices,
-    correctAnswer,
+    blanks,
     solutions,
+    // Backward-compatible aliases from first blank
+    blankIndex: blanks[0].index,
+    blankType: blanks[0].type,
+    choices: blanks[0].choices,
+    correctAnswer: blanks[0].correctAnswer,
   };
 }

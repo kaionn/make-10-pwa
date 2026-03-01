@@ -346,6 +346,29 @@ body {
   animation: start-pulse 2s ease-in-out infinite;
 }
 
+/* ---- v5: Blank filled pop animation ---- */
+
+@keyframes blank-filled {
+  0%   { transform: scale(0.8); }
+  50%  { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
+.animate-blank-filled {
+  animation: blank-filled 0.2s ease-out;
+}
+
+/* ---- v5: Choice fade-out animation ---- */
+
+@keyframes choice-fade-out {
+  0%   { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(0.9); }
+}
+
+.animate-choice-fade-out {
+  animation: choice-fade-out 0.15s ease-out forwards;
+}
+
 /* ---- Reduced motion ---- */
 
 @media (prefers-reduced-motion: reduce) {

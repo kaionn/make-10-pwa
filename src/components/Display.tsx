@@ -6,20 +6,64 @@ interface DisplayProps {
   answer?: string;
   level: Level;
   fillInBlankTokens?: ExpressionToken[];
+  currentBlankStep?: number;
+  filledBlanks?: string[];
 }
 
-function BlankSlot() {
+type BlankState = 'active' | 'inactive' | 'filled';
+
+function BlankSlot({ state, filledValue }: { state: BlankState; filledValue?: string }) {
+  if (state === 'filled') {
+    return (
+      <span
+        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border-2 border-solid border-emerald-400 bg-emerald-100 animate-blank-filled"
+        aria-label="かいとうずみ"
+      >
+        <span className="text-emerald-600 text-lg font-bold">{filledValue}</span>
+      </span>
+    );
+  }
+
+  if (state === 'inactive') {
+    return (
+      <span
+        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 opacity-60"
+        aria-label="つぎの くうらん"
+      >
+        <span className="text-slate-300 text-lg">?</span>
+      </span>
+    );
+  }
+
+  // active
   return (
     <span
       className="inline-flex h-9 w-9 items-center justify-center rounded-lg border-2 border-dashed border-amber-400 bg-amber-100 animate-blank-pulse"
       aria-label="えらんでね"
+      aria-current="step"
     >
       <span className="text-amber-300 text-lg">?</span>
     </span>
   );
 }
 
-function FillInBlankDisplay({ tokens }: { tokens: ExpressionToken[] }) {
+function FillInBlankDisplay({
+  tokens,
+  currentBlankStep = 0,
+  filledBlanks = [],
+}: {
+  tokens: ExpressionToken[];
+  currentBlankStep?: number;
+  filledBlanks?: string[];
+}) {
+  // Find blank indices in order
+  const blankIndices: number[] = [];
+  tokens.forEach((token, i) => {
+    if (token.isBlank) {
+      blankIndices.push(i);
+    }
+  });
+
   return (
     <div className="flex w-full items-center justify-center px-5 py-4">
       <div
@@ -29,7 +73,27 @@ function FillInBlankDisplay({ tokens }: { tokens: ExpressionToken[] }) {
         <span className="inline-flex flex-wrap items-center justify-center gap-0.5">
           {tokens.map((token, i) => {
             if (token.isBlank) {
-              return <BlankSlot key={i} />;
+              const blankOrder = blankIndices.indexOf(i);
+              let blankState: BlankState;
+
+              if (blankOrder < currentBlankStep) {
+                // Already filled
+                blankState = 'filled';
+              } else if (blankOrder === currentBlankStep) {
+                // Currently active
+                blankState = 'active';
+              } else {
+                // Not yet reached
+                blankState = 'inactive';
+              }
+
+              return (
+                <BlankSlot
+                  key={i}
+                  state={blankState}
+                  filledValue={filledBlanks[blankOrder]}
+                />
+              );
             }
             return (
               <span key={i} className="inline-block">
@@ -44,10 +108,16 @@ function FillInBlankDisplay({ tokens }: { tokens: ExpressionToken[] }) {
   );
 }
 
-export function Display({ expression, answer, level, fillInBlankTokens }: DisplayProps) {
+export function Display({ expression, answer, level, fillInBlankTokens, currentBlankStep, filledBlanks }: DisplayProps) {
   // Level 1: fill-in-the-blank display
   if (level === 1 && fillInBlankTokens) {
-    return <FillInBlankDisplay tokens={fillInBlankTokens} />;
+    return (
+      <FillInBlankDisplay
+        tokens={fillInBlankTokens}
+        currentBlankStep={currentBlankStep}
+        filledBlanks={filledBlanks}
+      />
+    );
   }
 
   // When showing an answer, display the answer expression

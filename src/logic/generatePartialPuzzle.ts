@@ -10,15 +10,33 @@ export interface PartialPuzzle {
 }
 
 /**
+ * Check if any solution in the array is parenthesis-free.
+ */
+function hasParenFreeSolution(solutions: string[]): boolean {
+  return solutions.some((s) => !s.includes('(') && !s.includes(')'));
+}
+
+const MAX_RETRIES = 50;
+
+/**
  * Generate a partial assembly puzzle for Level 2.
  *
- * Picks 4 solvable digits. Two are randomly chosen as "hinted" -- they get
- * visual emphasis in the NumberPad. All 4 numbers remain clickable; the user
- * builds a full expression just like Level 3, but the hints reduce cognitive load.
+ * Picks 4 solvable digits that have at least one parenthesis-free solution.
+ * Two are randomly chosen as "hinted" -- they get visual emphasis in the
+ * NumberPad. All 4 numbers remain clickable; the user builds a full
+ * expression just like Level 3, but the hints reduce cognitive load.
  */
 export function generatePartialPuzzle(): PartialPuzzle {
-  const digits = generatePuzzle();
-  const solutions = solve(digits);
+  let digits: number[];
+  let solutions: string[];
+
+  // Retry until we find a combination with a paren-free solution
+  let retries = 0;
+  do {
+    digits = generatePuzzle();
+    solutions = solve(digits);
+    retries++;
+  } while (!hasParenFreeSolution(solutions) && retries < MAX_RETRIES);
 
   // Create number entries (all available, none pre-used)
   const numbers: NumberEntry[] = digits.map((digit) => ({ digit, used: false }));

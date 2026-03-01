@@ -1,4 +1,89 @@
-# Architecture: Make 10 -- v3 難易度プログレッション + v4 ゲーム開始画面
+# Architecture: Make 10 -- v3 難易度プログレッション + v4 ゲーム開始画面 + v5 難易度再調整
+
+## 0-v5. v5 変更の概要
+
+v5 では Level 1 と Level 2 の難易度を再調整する:
+
+1. Level 1（超かんたん）: 空欄を1箇所から2箇所に変更。2箇所を順番に埋める2ステップ回答方式
+2. Level 2（かんたん）: 括弧なしで解ける4数字の組み合わせのみを出題。括弧ボタンを非表示
+
+### 0-v5.1 v5 で変更するファイル
+
+| ファイル | 変更内容 |
+|---------|---------|
+| `src/logic/generateFillInBlank.ts` | `FillInBlankPuzzle` を `blanks: BlankInfo[]` で複数空欄対応に拡張。後方互換のため旧フィールドも維持 |
+| `src/logic/generatePartialPuzzle.ts` | `hasParenFreeSolution()` ヘルパー追加、括弧なし解が存在する組み合わせのみ出題するリトライロジック |
+| `src/hooks/useMake10.ts` | `currentBlankStep`, `filledBlanks` 状態追加。`selectChoice()` を2ステップ回答に対応 |
+| `src/components/Display.tsx` | `BlankSlot` を3状態（active/inactive/filled）対応に拡張。`currentBlankStep`, `filledBlanks` props 追加 |
+| `src/components/ChoiceButtons.tsx` | `blankStep`, `stepLabel` props 追加。ステップインジケーター表示 |
+| `src/components/OperatorPad.tsx` | `hideBrackets` prop 追加。Level 2 で括弧ボタン非表示、4列レイアウトに変更 |
+| `src/App.tsx` | Level 1 に `currentBlankStep`/`filledBlanks` を渡す。Level 2 に `hideBrackets` を渡す |
+| `src/index.css` | `blank-filled`, `choice-fade-out` keyframes 追加 |
+
+### 0-v5.2 v5 で変更しないもの
+
+Level 3 の挙動、スコア計算、式パース、バリデーション、solvableCombinations データは変更なし。
+
+### 0-v5.3 BlankInfo / FillInBlankPuzzle の型設計
+
+```typescript
+interface BlankInfo {
+  index: number;              // tokens 内の空欄位置
+  type: 'operator' | 'number';
+  correctAnswer: string;
+  choices: string[];           // 空欄ごとに独立した選択肢
+}
+
+interface FillInBlankPuzzle {
+  numbers: number[];
+  tokens: ExpressionToken[];
+  blanks: BlankInfo[];         // 2箇所分（左から右の順）
+  solutions: string[];
+  // 後方互換エイリアス（blanks[0] から導出）
+  blankIndex: number;
+  blankType: 'operator' | 'number';
+  choices: string[];
+  correctAnswer: string;
+}
+```
+
+### 0-v5.4 Level 1 の2ステップ回答フロー
+
+```
+問題生成 → blanks[0], blanks[1] を事前計算
+  → Display: blank 0 = active, blank 1 = inactive
+  → ChoiceButtons: blanks[0].choices + "1つめの くうらん"
+  → selectChoice(index)
+    → 正解 → filledBlanks[0] を設定 → currentBlankStep = 1
+      → Display: blank 0 = filled, blank 1 = active
+      → ChoiceButtons: blanks[1].choices + "2つめの くうらん"（ポップイン再発動）
+    → 不正解 → シェイク → 同じ空欄で再挑戦
+  → selectChoice(index)（step 1）
+    → 正解 → score+1 → feedback='correct'
+    → 不正解 → シェイク → 再挑戦
+```
+
+### 0-v5.5 Level 2 の括弧なしフィルタリング
+
+```
+generatePartialPuzzle()
+  → generatePuzzle() + solve()
+  → hasParenFreeSolution(solutions) ?
+    → yes: 採用
+    → no: 再生成（最大50回リトライ）
+  → OperatorPad に hideBrackets=true で括弧ボタン非表示
+```
+
+### 0-v5.6 v5 アニメーション
+
+| アニメーション | 実装方法 | トリガー |
+|---------------|---------|---------|
+| 空欄完了ポップ | `@keyframes blank-filled` | 空欄に正解が埋まった時 |
+| 選択肢フェードアウト | `@keyframes choice-fade-out` | 空欄1正解→空欄2切り替え時 |
+
+`prefers-reduced-motion: reduce` で無効化。
+
+---
 
 ## 0. v4 変更の概要
 

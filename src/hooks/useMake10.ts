@@ -56,6 +56,9 @@ export interface Make10State {
   partialPuzzle: PartialPuzzle | null;
   wrongChoiceIndex: number | null;
   wrongChoiceKey: number;
+  // v5: 2-step blank flow
+  currentBlankStep: number; // 0 or 1 (which blank is currently active)
+  filledBlanks: string[];   // values filled in each blank slot
 }
 
 const STORAGE_KEY = 'make10-score';
@@ -113,6 +116,8 @@ function createInitialState(): Make10State {
     newLevel: null,
     wrongChoiceIndex: null,
     wrongChoiceKey: 0,
+    currentBlankStep: 0,
+    filledBlanks: [],
   };
 
   if (level === 1) {
@@ -249,7 +254,7 @@ export function useMake10() {
   }, []);
 
   /**
-   * Level 1: handle choice selection for fill-in-the-blank.
+   * Level 1: handle choice selection for fill-in-the-blank (v5: 2-step).
    */
   const selectChoice = useCallback((choiceIndex: number) => {
     setState((prev) => {
@@ -257,18 +262,40 @@ export function useMake10() {
       if (!prev.fillInBlankPuzzle) return prev;
 
       const puzzle = prev.fillInBlankPuzzle;
-      const selectedChoice = puzzle.choices[choiceIndex];
-      const isCorrect = selectedChoice === puzzle.correctAnswer;
+      const step = prev.currentBlankStep;
+      const blank = puzzle.blanks[step];
+
+      if (!blank) return prev;
+
+      const selectedChoice = blank.choices[choiceIndex];
+      const isCorrect = selectedChoice === blank.correctAnswer;
 
       if (isCorrect) {
-        const newScore = prev.score + 1;
+        const newFilledBlanks = [...prev.filledBlanks, selectedChoice];
+
+        // Check if this was the last blank
+        if (step >= puzzle.blanks.length - 1) {
+          // All blanks filled correctly -- score!
+          const newScore = prev.score + 1;
+          return {
+            ...prev,
+            feedback: 'correct' as const,
+            score: newScore,
+            celebrationVariant: pickRandom(CELEBRATION_VARIANTS),
+            correctMessage: pickRandom(CORRECT_MESSAGES),
+            wrongChoiceIndex: null,
+            currentBlankStep: step,
+            filledBlanks: newFilledBlanks,
+          };
+        }
+
+        // Advance to next blank
         return {
           ...prev,
-          feedback: 'correct' as const,
-          score: newScore,
-          celebrationVariant: pickRandom(CELEBRATION_VARIANTS),
-          correctMessage: pickRandom(CORRECT_MESSAGES),
+          currentBlankStep: step + 1,
+          filledBlanks: newFilledBlanks,
           wrongChoiceIndex: null,
+          wrongChoiceKey: prev.wrongChoiceKey + 1, // Reset wrong state
         };
       }
 
@@ -293,6 +320,8 @@ export function useMake10() {
         feedback: null,
         showGiveUpConfirm: false,
         wrongChoiceIndex: null,
+        currentBlankStep: 0,
+        filledBlanks: [],
       };
     }
 
@@ -307,6 +336,8 @@ export function useMake10() {
         feedback: null,
         showGiveUpConfirm: false,
         wrongChoiceIndex: null,
+        currentBlankStep: 0,
+        filledBlanks: [],
       };
     }
 
@@ -321,6 +352,8 @@ export function useMake10() {
       feedback: null,
       showGiveUpConfirm: false,
       wrongChoiceIndex: null,
+      currentBlankStep: 0,
+      filledBlanks: [],
     };
   }, []);
 

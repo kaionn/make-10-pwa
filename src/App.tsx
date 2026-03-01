@@ -34,6 +34,8 @@ function App() {
     partialPuzzle,
     wrongChoiceIndex,
     wrongChoiceKey,
+    currentBlankStep,
+    filledBlanks,
     appendDigit,
     appendOperator,
     appendBracket,
@@ -61,6 +63,10 @@ function App() {
   // Disable all controls when feedback is showing or give up confirm is open
   const controlsDisabled = feedback !== null || showGiveUpConfirm;
 
+  // v5: Determine current blank info for Level 1
+  const currentBlank = fillInBlankPuzzle?.blanks[currentBlankStep];
+  const stepLabels = ['1つめの くうらん', '2つめの くうらん'];
+
   return (
     <div className="relative mx-auto flex h-full max-w-[428px] flex-col bg-gradient-to-br from-amber-100 via-pink-100 to-indigo-100">
       <AmbientBackground />
@@ -74,22 +80,26 @@ function App() {
             answer={answerToShow}
             level={level}
             fillInBlankTokens={fillInBlankPuzzle?.tokens}
+            currentBlankStep={currentBlankStep}
+            filledBlanks={filledBlanks}
           />
 
           <div className="flex flex-col gap-3">
             {/* Level 1: Choice buttons only (no NumberPad, OperatorPad, ControlPad) */}
-            {level === 1 && fillInBlankPuzzle && (
+            {level === 1 && fillInBlankPuzzle && currentBlank && (
               <ChoiceButtons
-                choices={fillInBlankPuzzle.choices}
-                blankType={fillInBlankPuzzle.blankType}
+                choices={currentBlank.choices}
+                blankType={currentBlank.type}
                 onSelect={selectChoice}
                 puzzleKey={puzzleKey}
                 wrongChoiceKey={wrongChoiceKey > 0 ? String(wrongChoiceKey) : null}
                 wrongChoiceIdx={wrongChoiceIndex}
+                blankStep={currentBlankStep + 1}
+                stepLabel={stepLabels[currentBlankStep]}
               />
             )}
 
-            {/* Level 2: NumberPad (with hinted numbers) + OperatorPad + ControlPad */}
+            {/* Level 2: NumberPad (with hinted numbers) + OperatorPad (no brackets) + ControlPad */}
             {level === 2 && (
               <>
                 <NumberPad
@@ -98,7 +108,7 @@ function App() {
                   puzzleKey={puzzleKey}
                   hintedIndices={partialPuzzle?.hintedIndices}
                 />
-                <OperatorPad onOperator={appendOperator} onBracket={appendBracket} />
+                <OperatorPad onOperator={appendOperator} onBracket={appendBracket} hideBrackets />
                 <ControlPad
                   onBackspace={backspace}
                   onClear={clear}
